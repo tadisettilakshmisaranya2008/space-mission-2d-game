@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Mission 2D Game</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:Arial,sans-serif; background:#050816; color:#fff; text-align:center; }
+  h1 { color:#7dd3fc; margin:18px 8px 8px; }
+  p { color:#cbd5e1; margin:8px; }
+  #hud { display:flex; justify-content:center; gap:18px; flex-wrap:wrap; margin:12px; font-weight:bold; }
+  canvas { display:block; margin:12px auto; width:min(900px,95vw); height:auto; border:2px solid #334155; border-radius:12px; background:#0b1028; }
+  button { background:#0284c7; color:white; border:0; border-radius:8px; padding:11px 20px; font-size:16px; cursor:pointer; margin:6px; }
+  button:hover { background:#0369a1; }
+  .help { max-width:900px; margin:10px auto 22px; padding:0 12px; font-size:14px; }
+</style>
+</head>
+<body>
+<h1>🚀 Space Mission Simulator</h1>
+<p>Collect 5 science crystals and avoid asteroids to complete your mission!</p>
+<div id="hud">
+  <span>🔬 Samples: <span id="samples">0</span>/5</span>
+  <span>⛽ Fuel: <span id="fuel">100</span>%</span>
+  <span>⭐ Score: <span id="score">0</span></span>
+</div>
+<canvas id="game" width="900" height="520"></canvas>
+<button id="start">Start / Restart Mission</button>
+<div class="help">Controls: Arrow keys or WASD to move. Collect glowing blue crystals. Avoid asteroids. The mission ends when you collect 5 crystals or run out of fuel.</div>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const samplesEl = document.getElementById("samples");
+const fuelEl = document.getElementById("fuel");
+const scoreEl = document.getElementById("score");
+const startBtn = document.getElementById("start");
+
+const keys = {};
+let ship, crystals, asteroids, stars, samples, fuel, score, running, message, lastTime;
+
+function random(min, max) { return Math.random() * (max - min) + min; }
+function makeStars() {
+  return Array.from({length:120}, () => ({x:random(0,canvas.width), y:random(0,canvas.height), r:random(.5,2)}));
+}
+function resetGame() {
+  ship = {x:80, y:canvas.height/2, r:18, speed:3.6};
+  crystals = Array.from({length:5}, () => ({x:random(150,canvas.width-45), y:random(40,canvas.height-40), r:12, taken:false}));
+  asteroids = Array.from({length:8}, () => ({x:random(150,canvas.width-30), y:random(35,canvas.height-35), r:random(16,27), vx:random(-1.3,1.3), vy:random(-1.2,1.2)}));
+  stars = makeStars(); samples=0; fuel=100; score=0; running=true; message="";
+  lastTime=performance.now(); updateHUD();
+}
+function updateHUD() {
+  samplesEl.textContent=samples; fuelEl.textContent=Math.max(0,Math.ceil(fuel)); scoreEl.textContent=score;
+}
+function drawShip() {
+  ctx.save(); ctx.translate(ship.x,ship.y);
+  ctx.fillStyle="#e2e8f0"; ctx.beginPath();
+  ctx.moveTo(22,0); ctx.lineTo(-14,-13); ctx.lineTo(-8,0); ctx.lineTo(-14,13); ctx.closePath(); ctx.fill();
+  ctx.fillStyle="#38bdf8"; ctx.beginPath(); ctx.arc(0,0,5,0,Math.PI*2); ctx.fill();
+  if (running && (keys.ArrowUp||keys.w||keys.ArrowDown||keys.s||keys.ArrowLeft||keys.a||keys.ArrowRight||keys.d)) {
+    ctx.fillStyle="#fb923c"; ctx.beginPath(); ctx.moveTo(-12,-5); ctx.lineTo(-26,0); ctx.lineTo(-12,5); ctx.fill();
+  }
+  ctx.restore();
+}
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="#080d24"; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="#fff";
+  for(const s of stars){ctx.globalAlpha=random(.55,1);ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();}
+  ctx.globalAlpha=1;
+  // Earth in the corner
+  ctx.fillStyle="#1d4ed8"; ctx.beginPath(); ctx.arc(820,500,100,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle="#22c55e"; ctx.beginPath(); ctx.arc(790,470,34,0,Math.PI*2); ctx.fill();
+  for(const c of crystals) if(!c.taken) {
+    ctx.shadowColor="#38bdf8"; ctx.shadowBlur=18; ctx.fillStyle="#67e8f9";
+    ctx.beginPath(); ctx.moveTo(c.x,c.y-c.r); ctx.lineTo(c.x+c.r,c.y); ctx.lineTo(c.x,c.y+c.r); ctx.lineTo(c.x-c.r,c.y); ctx.closePath(); ctx.fill(); ctx.shadowBlur=0;
+  }
+  for(const a of asteroids) {
+    ctx.fillStyle="#78716c"; ctx.beginPath(); ctx.arc(a.x,a.y,a.r,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#57534e"; ctx.beginPath(); ctx.arc(a.x-a.r*.25,a.y-a.r*.2,a.r*.28,0,Math.PI*2); ctx.fill();
+  }
+  drawShip();
+  if(!running) {
+    ctx.fillStyle="rgba(2,6,23,.72)"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="#f8fafc"; ctx.font="bold 38px Arial"; ctx.textAlign="center"; ctx.fillText(message,canvas.width/2,canvas.height/2);
+    ctx.font="20px Arial"; ctx.fillText("Click Start / Restart Mission to play again",canvas.width/2,canvas.height/2+42);
+  }
+}
+function update(dt) {
+  if(!running) return;
+  const step=ship.speed*(dt/16.67);
+  if(keys.ArrowUp||keys.w) ship.y-=step;
+  if(keys.ArrowDown||keys.s) ship.y+=step;
+  if(keys.ArrowLeft||keys.a) ship.x-=step;
+  if(keys.ArrowRight||keys.d) ship.x+=step;
+  ship.x=Math.max(ship.r,Math.min(canvas.width-ship.r,ship.x));
+  ship.y=Math.max(ship.r,Math.min(canvas.height-ship.r,ship.y));
+  fuel-=0.025*(dt/16.67);
+  for(const a of asteroids) {
+    a.x+=a.vx*(dt/16.67); a.y+=a.vy*(dt/16.67);
+    if(a.x<a.r||a.x>canvas.width-a.r) a.vx*=-1;
+    if(a.y<a.r||a.y>canvas.height-a.r) a.vy*=-1;
+    if(Math.hypot(ship.x-a.x,ship.y-a.y)<ship.r+a.r-4) {
+      fuel-=8; score=Math.max(0,score-10);
+      // Move asteroid away after collision
+      a.x=random(canvas.width*.45,canvas.width-30); a.y=random(30,canvas.height-30);
+    }
+  }
+  for(const c of crystals) if(!c.taken && Math.hypot(ship.x-c.x,ship.y-c.y)<ship.r+c.r) {
+    c.taken=true; samples++; score+=100;
+  }
+  updateHUD();
+  if(samples>=5){running=false;message="MISSION SUCCESS! 🌟";score+=250;updateHUD();}
+  else if(fuel<=0){fuel=0;running=false;message="MISSION FAILED — OUT OF FUEL";}
+}
+function loop(now) {
+  const dt=Math.min(now-lastTime,40); lastTime=now;
+  update(dt); draw();
+  requestAnimationFrame(loop);
+}
+window.addEventListener("keydown",e=>{keys[e.key]=true; if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key))e.preventDefault();});
+window.addEventListener("keyup",e=>keys[e.key]=false);
+startBtn.addEventListener("click",resetGame);
+resetGame(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
